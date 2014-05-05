@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+OpenIDE-Module: org.ixxi.bridginess
+OpenIDE-Module-Localizing-Bundle: org/ixxi/bridginess/Bundle.properties
+OpenIDE-Module-Specification-Version: 0.2
+

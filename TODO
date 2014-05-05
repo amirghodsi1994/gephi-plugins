@@ -1,0 +1,10 @@
+other python lilbraries besides metworkx: igraph?
+
+Marton: path balance *--+----------------*
+
+reintroduce betewwnness in bridginess plugin
+
+
+rewrite naive implementation in python+networkx
+
+multiple calculations at once (3+4+5+6..+betweenness)

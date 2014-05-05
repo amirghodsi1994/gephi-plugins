@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+OpenIDE-Module: org.test.test
+OpenIDE-Module-Localizing-Bundle: org/test/test/Bundle.properties
+OpenIDE-Module-Specification-Version: 1.0
+
