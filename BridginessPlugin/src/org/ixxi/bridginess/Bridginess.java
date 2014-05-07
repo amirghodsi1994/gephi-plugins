@@ -2,6 +2,7 @@ package org.ixxi.bridginess;
 
 import java.io.IOException;
 import static java.lang.Boolean.FALSE;
+import static java.lang.Math.log;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.ListIterator;
@@ -52,6 +53,11 @@ public class Bridginess implements Statistics, LongTask {
     public static final String BRIDGINESSMSP4 = "bridginessmsp4"; //minimum len 4 SPs
     public static final String BRIDGINESSMSP5 = "bridginessmsp5"; //minimum len 5 SPs
     public static final String BRIDGINESSEXN = "bridginessexn"; //exclude neighbors
+    
+    public static final String NODEENTROPY = "nodeentropy";
+    
+    //from "gephi-0.8.2/modules/StatisticsPlugin/src/main/java/org/gephi/statistics/plugin/Modularity.java"
+    public static final String MODULARITY_CLASS = "modularity_class";
     //* */
     private double[] betweenness;
     //private double[] bridginessMSP;
@@ -60,6 +66,7 @@ public class Bridginess implements Statistics, LongTask {
     private double[] bridginessMSP5;
     private double[] bridginessEXN;
     
+    private double[] nodeentropy; 
     private double avgBridginess;
     
   
@@ -113,7 +120,8 @@ public class Bridginess implements Statistics, LongTask {
         AttributeColumn bridginessMSPCol4 = nodetable.getColumn(BRIDGINESSMSP4);
         AttributeColumn bridginessMSPCol5 = nodetable.getColumn(BRIDGINESSMSP5);
         AttributeColumn bridginessEXNCol = nodetable.getColumn(BRIDGINESSEXN);
-
+        AttributeColumn nodeentropyCol = nodetable.getColumn(NODEENTROPY);
+        
         if (betweennessCol == null) {
             betweennessCol = nodetable.addColumn(BETWEENNESS, "Betweenness", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
         }
@@ -134,6 +142,9 @@ public class Bridginess implements Statistics, LongTask {
         if (bridginessEXNCol == null) {
             bridginessEXNCol = nodetable.addColumn(BRIDGINESSEXN, "BridginessEXN", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
         }
+        if (nodeentropyCol == null) {
+            nodeentropyCol = nodetable.addColumn(NODEENTROPY, "nodeentropy", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
+        }
  
 
         hgraph.readLock();
@@ -146,6 +157,8 @@ public class Bridginess implements Statistics, LongTask {
         bridginessMSP4 = new double[N];
         bridginessMSP5 = new double[N];
         bridginessEXN = new double[N];
+        
+        nodeentropy = new double[N];
         
         //shortestPaths = 0;
        
@@ -161,6 +174,91 @@ public class Bridginess implements Statistics, LongTask {
         
         Progress.start(progress, hgraph.getNodeCount());
         int count = 0;
+        
+        //entropy
+        //count communities pop.
+        HashMap<Integer, Integer> communityPop = new HashMap<Integer, Integer>();
+        HashMap<Integer, LinkedList<Node>> communityNodes = new HashMap<Integer, LinkedList<Node>>();
+        
+        for (Node s : hgraph.getNodes()) {
+            Integer community = (Integer) s.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
+            if (communityPop.containsKey(community)) {
+                Integer freq = communityPop.get(community);
+                freq += 1;
+                communityPop.put(community, freq);
+                //insert member node in existing community                
+                communityNodes.get(community).addLast(s);
+            } else {
+                communityPop.put(community, 1);
+                //insert member node in not yet existing list
+                LinkedList<Node> ll = new LinkedList<Node>();
+                communityNodes.put(community, ll);
+                communityNodes.get(community).addLast(s);
+            }
+        }
+        
+        
+        for (Node s : hgraph.getNodes()) { 
+            
+           Integer sCommunity = (Integer) s.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
+           
+           //ignore nodes from small communities
+           //if (communityPop.get(sCommunity) < 100) {
+           //    continue;
+           //}
+           
+           Double nodeLocalWeights = 0.;
+           HashMap<Integer, Double> weightsByCommunity = new HashMap<Integer, Double>();
+           
+           for (Node t : hgraph.getNeighbors(s)) {
+                if (s == t) {
+                    continue;
+                }
+                
+                Integer tCommunity = (Integer) t.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
+
+                Double weight = (double) hgraph.getEdge(s, t).getWeight();
+
+                
+           
+                //compute cumulated weights per community
+                if (sCommunity == tCommunity) {
+                    nodeLocalWeights += weight;
+                } else {
+                    if (weightsByCommunity.containsKey(tCommunity)) {
+                        Double oldWBC = weightsByCommunity.get(tCommunity);
+                        weightsByCommunity.put(tCommunity, oldWBC + weight);
+                    } else {
+                        weightsByCommunity.put(tCommunity, weight);
+                    }
+                }
+
+           }
+           
+           //loop around communities
+           
+           Double nodeEntropy = 0.;
+           
+           for (Map.Entry<Integer, Double> entry : weightsByCommunity.entrySet()) {
+                              
+               Integer comm = entry.getKey();
+               if (communityPop.get(comm) < 0) {
+                   continue;
+               }
+
+               Double commWeights = entry.getValue();
+              
+               Double p_iJ = commWeights/(commWeights+nodeLocalWeights);
+               
+               nodeEntropy += (p_iJ) * (Double) log(p_iJ);
+            }
+           System.out.println("node ent " + nodeEntropy);
+           
+           AttributeRow row = (AttributeRow) s.getNodeData().getAttributes();
+           row.setValue(nodeentropyCol, nodeEntropy);
+        }
+    
+        //Brandes 2001----    
         for (Node s : hgraph.getNodes()) {
             Stack<Node> S = new Stack<Node>();
             //System.out.println("###### s is "+s);
@@ -341,6 +439,7 @@ public class Bridginess implements Statistics, LongTask {
             row.setValue(bridginessMSPCol4, bridginessMSP4[s_index]);   
             row.setValue(bridginessMSPCol5, bridginessMSP5[s_index]);   
             row.setValue(bridginessEXNCol, bridginessEXN[s_index]);   
+            //row.setValue(nodeentropyCol, nodeentropy[s_index]);   
         } 
         hgraph.readUnlock();                
     }
