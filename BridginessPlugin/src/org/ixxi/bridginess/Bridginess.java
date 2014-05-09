@@ -162,8 +162,8 @@ public class Bridginess implements Statistics, LongTask {
         
         //shortestPaths = 0;
        
-        System.out.println("Params: minPathLength " + minPathLength);
-        System.out.println("Params: exclNeighbors " + exclNeighbors);
+        //System.out.println("Params: minPathLength " + minPathLength);
+        //System.out.println("Params: exclNeighbors " + exclNeighbors);
 
         HashMap<Node, Integer> indicies = new HashMap<Node, Integer>();
         int index = 0;
@@ -207,22 +207,27 @@ public class Bridginess implements Statistics, LongTask {
            //    continue;
            //}
            
-           Double nodeLocalWeights = 0.;
+           
+           
            HashMap<Integer, Double> weightsByCommunity = new HashMap<Integer, Double>();
+           
+           Double nodeLocalWeights = 0d;
            
            for (Node t : hgraph.getNeighbors(s)) {
                 if (s == t) {
                     continue;
                 }
                 
+               
                 Integer tCommunity = (Integer) t.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
-
+                
                 Double weight = (double) hgraph.getEdge(s, t).getWeight();
 
                 
-           
+          
                 //compute cumulated weights per community
-                if (sCommunity == tCommunity) {
+                
+                if (sCommunity.intValue() == tCommunity.intValue()) {
                     nodeLocalWeights += weight;
                 } else {
                     if (weightsByCommunity.containsKey(tCommunity)) {
@@ -242,22 +247,27 @@ public class Bridginess implements Statistics, LongTask {
            for (Map.Entry<Integer, Double> entry : weightsByCommunity.entrySet()) {
                               
                Integer comm = entry.getKey();
+               System.out.println("comm " + comm + " size " + communityPop.get(comm));
                if (communityPop.get(comm) < 0) {
                    continue;
                }
 
                Double commWeights = entry.getValue();
               
+               //System.out.println("commweights " + commWeights + " nodelocalweights " + nodeLocalWeights);
+               
                Double p_iJ = commWeights/(commWeights+nodeLocalWeights);
+               
+               //System.out.println("p_iJ " + p_iJ);
                
                nodeEntropy += (p_iJ) * (Double) log(p_iJ);
             }
-           System.out.println("node ent " + nodeEntropy);
+           //System.out.println("node tot ent " + nodeEntropy);
            
            AttributeRow row = (AttributeRow) s.getNodeData().getAttributes();
            row.setValue(nodeentropyCol, nodeEntropy);
         }
-    
+/*
         //Brandes 2001----    
         for (Node s : hgraph.getNodes()) {
             Stack<Node> S = new Stack<Node>();
@@ -441,6 +451,7 @@ public class Bridginess implements Statistics, LongTask {
             row.setValue(bridginessEXNCol, bridginessEXN[s_index]);   
             //row.setValue(nodeentropyCol, nodeentropy[s_index]);   
         } 
+*/
         hgraph.readUnlock();                
     }
        
