@@ -4,6 +4,7 @@ import java.io.IOException;
 import static java.lang.Boolean.FALSE;
 import static java.lang.Math.log;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.Map;
@@ -55,6 +56,7 @@ public class Bridginess implements Statistics, LongTask {
     public static final String BRIDGINESSEXN = "bridginessexn"; //exclude neighbors
     
     public static final String NODEENTROPY = "nodeentropy";
+    public static final String STIRLING = "nodestirling";
     
     //from "gephi-0.8.2/modules/StatisticsPlugin/src/main/java/org/gephi/statistics/plugin/Modularity.java"
     public static final String MODULARITY_CLASS = "modularity_class";
@@ -67,6 +69,8 @@ public class Bridginess implements Statistics, LongTask {
     private double[] bridginessEXN;
     
     private double[] nodeentropy; 
+    private double[] stirling;
+    
     private double avgBridginess;
     
   
@@ -121,6 +125,7 @@ public class Bridginess implements Statistics, LongTask {
         AttributeColumn bridginessMSPCol5 = nodetable.getColumn(BRIDGINESSMSP5);
         AttributeColumn bridginessEXNCol = nodetable.getColumn(BRIDGINESSEXN);
         AttributeColumn nodeentropyCol = nodetable.getColumn(NODEENTROPY);
+        AttributeColumn stirlingCol = nodetable.getColumn(STIRLING);
         
         if (betweennessCol == null) {
             betweennessCol = nodetable.addColumn(BETWEENNESS, "Betweenness", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
@@ -145,6 +150,9 @@ public class Bridginess implements Statistics, LongTask {
         if (nodeentropyCol == null) {
             nodeentropyCol = nodetable.addColumn(NODEENTROPY, "nodeentropy", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
         }
+        if (stirlingCol == null) {
+            stirlingCol = nodetable.addColumn(STIRLING, "nodestirling", AttributeType.DOUBLE, AttributeOrigin.COMPUTED, new Double(0));
+        }
  
 
         hgraph.readLock();
@@ -159,7 +167,7 @@ public class Bridginess implements Statistics, LongTask {
         bridginessEXN = new double[N];
         
         nodeentropy = new double[N];
-        
+        stirling = new double[N];
         //shortestPaths = 0;
        
         //System.out.println("Params: minPathLength " + minPathLength);
@@ -179,7 +187,7 @@ public class Bridginess implements Statistics, LongTask {
         //count communities pop.
         HashMap<Integer, Integer> communityPop = new HashMap<Integer, Integer>();
         HashMap<Integer, LinkedList<Node>> communityNodes = new HashMap<Integer, LinkedList<Node>>();
-        
+                      
         for (Node s : hgraph.getNodes()) {
             Integer community = (Integer) s.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
             if (communityPop.containsKey(community)) {
@@ -197,39 +205,78 @@ public class Bridginess implements Statistics, LongTask {
             }
         }
         
+        Integer communityNum = communityPop.size();
+        System.out.println(communityNum + " communities found.");
+        
+        Double communityDistance[][] = new Double[communityNum][communityNum];
+        Double communityDistanceInverse[][] = new Double[communityNum][communityNum];
+        
+        //initialize distances;
+        //WARNING: presumes communities #0, #1, #2...#N (no gaps)
+        for (int sComm = 0; sComm < communityNum; sComm++) {
+            for (int tComm = 0; tComm < communityNum; tComm++) {
+                communityDistance[sComm][tComm] = Double.POSITIVE_INFINITY;   
+                communityDistanceInverse[sComm][tComm] = 0.0;   
+            }
+        }
+  
+        
+        for (Node s : hgraph.getNodes()) {
+            Integer sComm = (Integer) s.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
+            for (Node t : hgraph.getNeighbors(s)) {
+                Integer tComm = (Integer) t.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
+                //same community, not interesting
+
+                if (sComm.intValue() == tComm.intValue()) {
+                    continue;
+                }
+                
+                double wl_st = (double) hgraph.getEdge(s, t).getWeight();
+                System.out.println("sc " + sComm + " tc " + tComm + " wl_st " + wl_st);
+                
+                communityDistanceInverse[sComm][tComm] += wl_st;
+            }
+        }
+
+        for (int sComm = 0; sComm < communityNum; sComm++) {
+            for (int tComm = 0; tComm < communityNum; tComm++) {
+                communityDistance[sComm][tComm] = 1/communityDistanceInverse[sComm][tComm];
+                System.out.println("commdist: s " + sComm + " t " + tComm + " dist: " + communityDistance[sComm][tComm]);
+            }
+        }
+
+        
+        
         
         for (Node s : hgraph.getNodes()) { 
             
            Integer sCommunity = (Integer) s.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
-           
+        
            //ignore nodes from small communities
            //if (communityPop.get(sCommunity) < 100) {
            //    continue;
            //}
-           
-           
-           
-           HashMap<Integer, Double> weightsByCommunity = new HashMap<Integer, Double>();
-           
+                      
+           HashMap<Integer, Double> weightsByCommunity = new HashMap<Integer, Double>();           
            Double nodeLocalWeights = 0d;
+           Double nodeTotalWeights = 0d;
            
            for (Node t : hgraph.getNeighbors(s)) {
                 if (s == t) {
                     continue;
                 }
-                
                
-                Integer tCommunity = (Integer) t.getNodeData().getAttributes().getValue(MODULARITY_CLASS);
-                
+                Integer tCommunity = (Integer) t.getNodeData().getAttributes().getValue(MODULARITY_CLASS);                
                 Double weight = (double) hgraph.getEdge(s, t).getWeight();
 
+                //overall weights (for normalization)
+                nodeTotalWeights += weight;
                 
-          
                 //compute cumulated weights per community
                 
                 if (sCommunity.intValue() == tCommunity.intValue()) {
                     nodeLocalWeights += weight;
-                } else {
+                } else 
                     if (weightsByCommunity.containsKey(tCommunity)) {
                         Double oldWBC = weightsByCommunity.get(tCommunity);
                         weightsByCommunity.put(tCommunity, oldWBC + weight);
@@ -238,12 +285,11 @@ public class Bridginess implements Statistics, LongTask {
                     }
                 }
 
-           }
+                
+           //}
            
-           //loop around communities
-           
+                     
            Double nodeEntropy = 0.;
-           
            for (Map.Entry<Integer, Double> entry : weightsByCommunity.entrySet()) {
                               
                Integer comm = entry.getKey();
@@ -262,11 +308,65 @@ public class Bridginess implements Statistics, LongTask {
                
                nodeEntropy += (p_iJ) * (Double) log(p_iJ);
             }
+
+          
+           Double nodeStirling = 0.;
+           
+           //for (int comm1 = 0; comm1 < communityNum ; comm1++) {
+           //for (Map.Entry<Integer, Double> comm1entry : weightsByCommunity.entrySet()) {
+           Iterator comm1iter = weightsByCommunity.entrySet().iterator();
+           while (comm1iter.hasNext()) {
+           
+               Map.Entry comm1entry = (Map.Entry) comm1iter.next();
+               Integer comm1 = (Integer) comm1entry.getKey();
+               
+               Double p_iJ1= (Double) comm1entry.getValue();
+               //System.out.println("comm1 " + comm1 + " p_iJ1 "+ p_iJ1);
+               
+               //for (int comm2 = 0; comm2 < communityNum ; comm2++) {
+               //for (Map.Entry<Integer, Double> comm2entry : weightsByCommunity.entrySet()) {
+               Iterator comm2iter = weightsByCommunity.entrySet().iterator();
+               
+                   Map.Entry comm2entry = (Map.Entry) comm2iter.next();
+                   Integer comm2 = (Integer) comm2entry.getKey();
+                            
+                   //System.out.println("comm1intvalue " + comm1.intValue() + " comm2intvalue " + comm2.intValue());
+                   if (comm1.intValue() == comm2.intValue()) {
+                       continue;
+                   }
+                 
+                   //double p_iJ2 = (double) weightsByCommunity.get(comm2);
+                   Double p_iJ2 = (Double) comm2entry.getValue();
+                   //System.out.println("comm1 " + comm1 + " comm2 " + comm2 + " p_iJ1 "+ p_iJ1 + " p_iJ2 " + p_iJ2);
+                   Double d_j1j2 = (double) communityDistance[comm1.intValue()][comm2.intValue()];
+                   
+                   nodeStirling += (p_iJ1 * p_iJ2 * d_j1j2);
+                   //System.out.println("nodestirling " + nodeStirling);
+               }    
+               
+           //}
+           /*
+           for (Map.Entry<Integer, Double> entrySourceComm : weightsByCommunity.entrySet()) {
+               Integer commSource = entry.getKey();
+               Double commWeightsSource = entry.getValue();  
+                              
+               for (Map.Entry<Integer, Double> entryTargetComm : weightsByCommunity.entrySet()) {
+    
+               Double p_iJ = ...;
+               
+               //double loop around communities...
+               nodeStirling = ///;
+            }
+            */
+           
            //System.out.println("node tot ent " + nodeEntropy);
            
            AttributeRow row = (AttributeRow) s.getNodeData().getAttributes();
            row.setValue(nodeentropyCol, nodeEntropy);
+           row.setValue(stirlingCol, nodeStirling);
         }
+
+        
 /*
         //Brandes 2001----    
         for (Node s : hgraph.getNodes()) {
@@ -454,7 +554,7 @@ public class Bridginess implements Statistics, LongTask {
 */
         hgraph.readUnlock();                
     }
-       
+  
        
    
     @Override
