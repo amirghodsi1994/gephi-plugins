@@ -285,6 +285,8 @@ public class Bridginess implements Statistics, LongTask {
                     }
                 }
 
+                
+           //}
            
                      
            Double nodeEntropy = 0.;
@@ -310,6 +312,8 @@ public class Bridginess implements Statistics, LongTask {
           
            Double nodeStirling = 0.;
            
+           //for (int comm1 = 0; comm1 < communityNum ; comm1++) {
+           //for (Map.Entry<Integer, Double> comm1entry : weightsByCommunity.entrySet()) {
            Iterator comm1iter = weightsByCommunity.entrySet().iterator();
            while (comm1iter.hasNext()) {
            
@@ -317,22 +321,46 @@ public class Bridginess implements Statistics, LongTask {
                Integer comm1 = (Integer) comm1entry.getKey();
                
                Double p_iJ1= (Double) comm1entry.getValue();
-
+               //System.out.println("comm1 " + comm1 + " p_iJ1 "+ p_iJ1);
+               
+               //for (int comm2 = 0; comm2 < communityNum ; comm2++) {
+               //for (Map.Entry<Integer, Double> comm2entry : weightsByCommunity.entrySet()) {
                Iterator comm2iter = weightsByCommunity.entrySet().iterator();
                
                    Map.Entry comm2entry = (Map.Entry) comm2iter.next();
                    Integer comm2 = (Integer) comm2entry.getKey();
                             
+                   //System.out.println("comm1intvalue " + comm1.intValue() + " comm2intvalue " + comm2.intValue());
                    if (comm1.intValue() == comm2.intValue()) {
                        continue;
                    }
                  
+                   //double p_iJ2 = (double) weightsByCommunity.get(comm2);
                    Double p_iJ2 = (Double) comm2entry.getValue();
+                   //System.out.println("comm1 " + comm1 + " comm2 " + comm2 + " p_iJ1 "+ p_iJ1 + " p_iJ2 " + p_iJ2);
                    Double d_j1j2 = (double) communityDistance[comm1.intValue()][comm2.intValue()];
                    
                    nodeStirling += (p_iJ1 * p_iJ2 * d_j1j2);
+                   //System.out.println("nodestirling " + nodeStirling);
                }    
-
+               
+           //}
+           /*
+           for (Map.Entry<Integer, Double> entrySourceComm : weightsByCommunity.entrySet()) {
+               Integer commSource = entry.getKey();
+               Double commWeightsSource = entry.getValue();  
+                              
+               for (Map.Entry<Integer, Double> entryTargetComm : weightsByCommunity.entrySet()) {
+    
+               Double p_iJ = ...;
+               
+               //double loop around communities...
+               nodeStirling = ///;
+            }
+            */
+           
+           //System.out.println("node tot ent " + nodeEntropy);
+           
            AttributeRow row = (AttributeRow) s.getNodeData().getAttributes();
            row.setValue(nodeentropyCol, nodeEntropy);
            row.setValue(stirlingCol, nodeStirling);
